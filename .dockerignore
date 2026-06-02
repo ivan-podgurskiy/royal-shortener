@@ -1,0 +1,22 @@
+# Build artifacts (regenerated inside the image)
+**/build/
+**/.lustre/
+**/dist/
+**/priv/static/
+
+# Erlang/Gleam cruft
+**/*.beam
+**/*.ez
+**/erl_crash.dump
+
+# VCS and tooling
+.git/
+.github/
+docs/
+
+# The original React prototype is reference material, not part of the app
+Royal Shortener UI/
+
+# OS / editor noise
+**/.DS_Store
+**/node_modules/

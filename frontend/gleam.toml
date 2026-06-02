@@ -20,3 +20,18 @@ lustre = ">= 5.7.0 and < 6.0.0"
 [dev_dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
 lustre_dev_tools = ">= 2.3.6 and < 3.0.0"
+
+[tools.lustre.html]
+lang = "en"
+title = "Royal Shortener"
+
+[[tools.lustre.html.meta]]
+name = "description"
+content = "Royal Shortener takes long, unworthy URLs and crowns them as elegant links."
+
+# Dev-server proxy: during `gleam run -m lustre/dev start` (port 1234) any
+# request under /api is forwarded to the backend (port 8080), so the frontend
+# can talk to the API from a single origin with live-reload intact. In
+# production the backend serves both the bundle and the API, so this is unused.
+[tools.lustre.dev]
+proxy = { from = "/api", to = "http://localhost:8080/api" }
