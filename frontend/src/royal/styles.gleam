@@ -413,9 +413,10 @@ html, body { margin: 0; padding: 0; }
   background: linear-gradient(180deg, var(--gold-soft), transparent 60%), var(--bg-deep);
   padding: 22px;
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 22px;
   align-items: center;
+  overflow: hidden;
 }
 .result .short-line { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; min-width: 0; }
 .result .short {
@@ -480,6 +481,30 @@ html, body { margin: 0; padding: 0; }
 }
 .qr i { background: #1c1a14; border-radius: 1px; }
 .qr i.off { background: transparent; }
+
+/* Real QR from the API — same footprint as the faux seal above */
+.qr-real {
+  flex-shrink: 0;
+  width: 104px;
+  height: 104px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px;
+  overflow: hidden;
+  background: #f4eede;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--gold-3), 0 10px 24px -12px rgba(0,0,0,.8);
+}
+.qr-real .qr-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
 
 /* ---- recent ledger ---- */
 .ledger { margin: 22px auto 0; max-width: 760px; }
@@ -632,6 +657,7 @@ html, body { margin: 0; padding: 0; }
   .feature-grid { grid-template-columns: 1fr; }
   .footer-top { grid-template-columns: 1fr 1fr; }
   .result { grid-template-columns: 1fr; }
+  .qr-real { justify-self: center; }
   .input-row { flex-direction: column; }
 }
 @media (max-width: 520px) {

@@ -4,6 +4,21 @@ import gleam/int
 import gleam/list
 import gleam/string
 
+pub fn host_from_origin(origin: String) -> String {
+  case string.split_once(origin, "://") {
+    Ok(#(_, host)) -> host
+    Error(_) -> origin
+  }
+}
+
+pub fn short_url(origin: String, slug: String) -> String {
+  origin <> "/" <> slug
+}
+
+pub fn short_prefix(origin: String) -> String {
+  host_from_origin(origin) <> "/"
+}
+
 pub fn strip_scheme(url: String) -> String {
   case string.starts_with(url, "https://") {
     True -> string.drop_start(url, 8)

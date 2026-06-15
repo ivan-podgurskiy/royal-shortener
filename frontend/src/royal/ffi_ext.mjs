@@ -28,3 +28,7 @@ export function after(ms, callback) {
   }, ms);
   return undefined;
 }
+
+export function pageOrigin() {
+  return window.location.origin;
+}

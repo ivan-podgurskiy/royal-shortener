@@ -11,3 +11,7 @@ pub fn copy_text(text: String) -> Nil
 /// Invoke `callback` after `ms` milliseconds.
 @external(javascript, "./ffi_ext.mjs", "after")
 pub fn after(ms: Int, callback: fn() -> Nil) -> Nil
+
+/// The page origin, e.g. `https://localhost:1234`.
+@external(javascript, "./ffi_ext.mjs", "pageOrigin")
+pub fn page_origin() -> String
