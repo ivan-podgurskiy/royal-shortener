@@ -23,7 +23,10 @@ pub type Conn =
   sqlight.Connection
 
 pub fn open(path: String) -> Result(Conn, Error) {
-  sqlight.open(path) |> result.map_error(OpenError)
+  use conn <- result.try(sqlight.open(path) |> result.map_error(OpenError))
+  use _ <- result.try(exec("PRAGMA journal_mode=WAL", conn))
+  use _ <- result.try(exec("PRAGMA busy_timeout=5000", conn))
+  Ok(conn)
 }
 
 pub fn close(conn: Conn) -> Result(Nil, Error) {

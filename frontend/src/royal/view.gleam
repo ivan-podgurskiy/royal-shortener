@@ -1,5 +1,6 @@
 //// Royal Shortener — the full landing-page view and every view helper.
 
+import gleam/int
 import gleam/list
 import gleam/option
 import gleam/string
@@ -125,9 +126,11 @@ fn shortener(model: types.Model) -> Element(types.Msg) {
         ]),
         html.span(
           [attr.class("hint mono"), attr.style("opacity", "0.7")],
-          [element.text("royal.sh/…")],
+          [element.text(format.short_prefix(model.origin) <> "…")],
         ),
       ]),
+      protection_controls(model),
+      error_banner(model),
       html.div([attr.class(stage_class(model))], stage_children(model)),
     ]),
     ledger_view(model),
@@ -181,12 +184,14 @@ fn animating_text(model: types.Model) -> String {
 
 fn result_card(model: types.Model, result: types.Minted) -> Element(types.Msg) {
   let is_copied = model.copied == option.Some(result.slug)
-  let copy_text = "royal.sh/" <> result.slug
+  let copy_text = format.short_url(model.origin, result.slug)
   html.div([attr.class("result rise")], [
     html.div([], [
       html.div([attr.class("short-line")], [
         html.span([attr.class("short mono")], [
-          html.span([attr.class("dom")], [element.text("royal.sh/")]),
+          html.span([attr.class("dom")], [
+            element.text(format.short_prefix(model.origin)),
+          ]),
           html.span([attr.class("slug")], [element.text(result.slug)]),
         ]),
       ]),
@@ -194,6 +199,17 @@ fn result_card(model: types.Model, result: types.Minted) -> Element(types.Msg) {
         meta_item("Minted", "Just now"),
         meta_item("Clicks", "0"),
         meta_item("Title", result.title),
+        meta_item("Expires", expiry_label(result.expiry)),
+        meta_item("Click limit", click_limit_label(result.click_limit)),
+      ]),
+      html.div([attr.class("secret-row")], [
+        html.div([attr.class("k")], [element.text("Management key")]),
+        html.code([attr.class("secret mono")], [element.text(result.secret)]),
+        html.p([attr.class("hint")], [
+          element.text(
+            "Save this token. It is the only way to manage this link or view its stats without an account.",
+          ),
+        ]),
       ]),
       html.div([attr.class("result-actions")], [
         html.button(
@@ -209,12 +225,20 @@ fn result_card(model: types.Model, result: types.Minted) -> Element(types.Msg) {
             }),
           ],
         ),
+        html.a(
+          [
+            attr.href(qr_url(result.slug)),
+            attr.download(result.slug <> "-qr.svg"),
+            attr.class("copy-btn"),
+          ],
+          [element.text("Download QR")],
+        ),
         html.button([attr.class("link-btn"), event.on_click(types.ResetClicked)], [
           element.text("Shorten another ↺"),
         ]),
       ]),
     ]),
-    qr_seal(result.slug),
+    qr_image(model, result.slug),
   ])
 }
 
@@ -232,16 +256,88 @@ fn meta_item(key: String, value: String) -> Element(types.Msg) {
   ])
 }
 
-fn qr_seal(seed: String) -> Element(types.Msg) {
-  html.div(
-    [attr.class("qr"), attribute("aria-hidden", "true")],
-    list.map(data.make_qr(seed), fn(on) {
-      case on {
-        True -> html.i([], [])
-        False -> html.i([attr.class("off")], [])
-      }
-    }),
+fn protection_controls(model: types.Model) -> Element(types.Msg) {
+  html.div([attr.class("protection-row")], [
+    html.label([attr.class("protection-field")], [
+      html.span([attr.class("k")], [element.text("Expires in")]),
+      html.select(
+        [
+          attr.class("protection-input"),
+          event.on_change(types.ExpiryChanged),
+        ],
+        [
+          expiry_option("never", "Never", model.expiry, types.Never),
+          expiry_option("1h", "1 hour", model.expiry, types.OneHour),
+          expiry_option("24h", "24 hours", model.expiry, types.OneDay),
+          expiry_option("7d", "7 days", model.expiry, types.SevenDays),
+        ],
+      ),
+    ]),
+    html.label([attr.class("protection-field")], [
+      html.span([attr.class("k")], [element.text("Click limit")]),
+      html.input([
+        attr.class("protection-input"),
+        attr.type_("number"),
+        attr.min("1"),
+        attr.placeholder("Unlimited"),
+        attr.value(model.click_limit),
+        event.on_input(types.ClickLimitChanged),
+      ]),
+    ]),
+  ])
+}
+
+fn expiry_option(
+  value: String,
+  label: String,
+  selected: types.ExpiryPreset,
+  preset: types.ExpiryPreset,
+) -> Element(types.Msg) {
+  html.option(
+    [
+      attr.value(value),
+      attr.selected(selected == preset),
+    ],
+    label,
   )
+}
+
+fn expiry_label(preset: types.ExpiryPreset) -> String {
+  case preset {
+    types.Never -> "Never"
+    types.OneHour -> "1 hour"
+    types.OneDay -> "24 hours"
+    types.SevenDays -> "7 days"
+  }
+}
+
+fn click_limit_label(limit: option.Option(Int)) -> String {
+  case limit {
+    option.None -> "Unlimited"
+    option.Some(n) -> int.to_string(n)
+  }
+}
+
+fn error_banner(model: types.Model) -> Element(types.Msg) {
+  case model.error {
+    option.None -> element.none()
+    option.Some(msg) ->
+      html.div([attr.class("error-banner")], [element.text(msg)])
+  }
+}
+
+fn qr_url(slug: String) -> String {
+  "/api/links/" <> slug <> "/qr"
+}
+
+fn qr_image(model: types.Model, slug: String) -> Element(types.Msg) {
+  html.div([attr.class("qr-real")], [
+    html.img([
+      attr.src(qr_url(slug)),
+      attr.alt("QR code for " <> format.short_url(model.origin, slug)),
+      attr.class("qr-img"),
+    ]),
+  ])
 }
 
 // LEDGER ----------------------------------------------------------------------
@@ -262,11 +358,12 @@ fn ledger_view(model: types.Model) -> Element(types.Msg) {
 
 fn ledger_row(model: types.Model, item: types.LedgerItem) -> Element(types.Msg) {
   let is_copied = model.copied == option.Some(item.slug)
-  let copy_text = "royal.sh/" <> item.slug
+  let copy_text = format.short_url(model.origin, item.slug)
+  let display = format.short_url(model.origin, item.slug)
   html.div([attr.class("ledger-row rise")], [
     html.div([attr.class("lr-left")], [
       html.span([attr.class("lr-short")], [
-        element.text("royal.sh/" <> item.slug),
+        element.text(display),
       ]),
       html.span([attr.class("lr-long")], [element.text(item.long_text)]),
     ]),
@@ -460,4 +557,13 @@ const extra_css = "
   100% { transform: translate(-50%,-50%) scale(2.6); opacity: 0; }
 }
 .flare.popping { animation: flarePop 0.82s ease-out forwards; }
+.protection-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+.protection-field { display: flex; flex-direction: column; gap: 6px; }
+.protection-field .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.7; }
+.protection-input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.2); color: inherit; font: inherit; }
+.secret-row { margin-top: 16px; padding: 12px 16px; border: 1px dashed rgba(255,200,80,0.4); border-radius: 8px; background: rgba(255,200,80,0.06); }
+.secret-row .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.7; margin-bottom: 4px; }
+.secret-row .secret { display: block; padding: 6px 0; font-size: 13px; word-break: break-all; }
+.secret-row .hint { margin-top: 4px; font-size: 12px; opacity: 0.75; }
+.error-banner { margin-top: 12px; padding: 10px 14px; border-radius: 8px; background: rgba(255,90,90,0.12); color: #ffd7d7; font-size: 14px; }
 "

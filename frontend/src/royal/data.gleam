@@ -1,10 +1,8 @@
-//// Royal Shortener — data, slug minting and the faux QR-seal pattern.
-//// Ported from data.jsx.
+//// Royal Shortener — data and the faux QR-seal pattern.
 
 import gleam/int
 import gleam/list
 import gleam/string
-import royal/ffi
 
 /// A single privilege shown in the feature grid.
 pub type Feature {
@@ -12,14 +10,6 @@ pub type Feature {
 }
 
 pub const slides_url = "https://docs.google.com/presentation/d/1aXk9Qv7RmZ2-RoyalShortener-Pitch-Deck-2026/edit#slide=id.g2f8c41ad7b_0_142"
-
-const royal_words = [
-  "Regalia", "Sovereign", "Crowned", "Imperial", "Majesty", "Coronet", "Heir",
-  "Throne", "Scepter", "Diadem", "Monarch", "Noble", "Court", "Crest",
-  "Royaume", "Sceptre", "Ermine", "Laurel", "Gilded", "Dauphin",
-]
-
-const tag_alphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
 
 pub fn features() -> List(Feature) {
   [
@@ -33,7 +23,7 @@ pub fn features() -> List(Feature) {
       "IcoCrest",
       "II",
       "Bestow a Title",
-      "Grant any link a vanity name worthy of its station — royal.sh/your-decree — and brand it as your own domain.",
+      "Grant any link a vanity name worthy of its station — your-domain/your-decree — and brand it as your own domain.",
     ),
     Feature(
       "IcoSeal",
@@ -48,43 +38,6 @@ pub fn features() -> List(Feature) {
       "Protect links like the crown jewels — passwords, expiry dates, and click limits, all by your command.",
     ),
   ]
-}
-
-/// Mint a random royal slug, e.g. `Sovereign-7qz`.
-pub fn random_slug() -> String {
-  let word = pick(royal_words, "Sovereign")
-  word <> "-" <> random_tag(3)
-}
-
-fn pick(items: List(String), fallback: String) -> String {
-  let length = list.length(items)
-  case length {
-    0 -> fallback
-    _ -> {
-      let index = ffi.random_int(length)
-      case list_at(items, index) {
-        Ok(value) -> value
-        Error(_) -> fallback
-      }
-    }
-  }
-}
-
-fn list_at(items: List(String), index: Int) -> Result(String, Nil) {
-  list.drop(items, index)
-  |> list.first
-}
-
-fn random_tag(length: Int) -> String {
-  case length {
-    n if n <= 0 -> ""
-    _ -> random_char() <> random_tag(length - 1)
-  }
-}
-
-fn random_char() -> String {
-  let chars = string.to_graphemes(tag_alphabet)
-  pick(chars, "x")
 }
 
 // ---------------------------------------------------------------------------

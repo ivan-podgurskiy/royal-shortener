@@ -1,19 +1,34 @@
+import backend/api
+import backend/db
+import backend/slug as slug_mod
+import gleam/http
 import gleam/http/request
 import gleam/http/response
 import gleam/option
 import wisp.{type Request, type Response}
 
-/// Top-level request handler. Static assets (the compiled Lustre bundle and
-/// any other files) are served from `static_directory`; everything else falls
-/// through to the application routes.
-pub fn handle_request(req: Request, static_directory: String) -> Response {
+/// Top-level request handler. Order of decisions:
+///   1. Static assets from `static_directory`.
+///   2. `/api/*` — JSON API.
+///   3. `/health` — plain "ok".
+///   4. `/:slug` — single-segment redirect.
+///   5. Anything else — return `index.html` so the SPA can take over.
+pub fn handle_request(
+  req: Request,
+  static_directory: String,
+  conn: db.Conn,
+) -> Response {
   use <- wisp.serve_static(req, under: "/", from: static_directory)
 
   case request.path_segments(req) {
+    ["api", "links", slug, "qr"] -> api.link_qr(req, slug, conn)
+    ["api", "links"] -> api.create_link(req, conn)
     ["health"] -> health()
-
-    // Single-page app: any unmatched, non-asset path returns the host page so
-    // the client-side router can take over.
+    [slug] ->
+      case req.method, is_reserved_top_level(slug) {
+        http.Get, False -> api.redirect_slug(slug, conn)
+        _, _ -> index(static_directory)
+      }
     _ -> index(static_directory)
   }
 }
@@ -28,4 +43,8 @@ fn index(static_directory: String) -> Response {
   wisp.response(200)
   |> response.set_header("content-type", "text/html; charset=utf-8")
   |> wisp.set_body(wisp.File(path: index_path, offset: 0, limit: option.None))
+}
+
+fn is_reserved_top_level(path: String) -> Bool {
+  slug_mod.is_reserved(path)
 }
