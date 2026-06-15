@@ -1,4 +1,5 @@
 import backend/db
+import backend/geoip
 import backend/router
 import envoy
 import gleam/erlang/process
@@ -11,15 +12,19 @@ import wisp/wisp_mist
 
 pub fn main() -> Nil {
   wisp.configure_logger()
+  geoip.start()
 
   let assert Ok(priv) = wisp.priv_directory("backend")
   let static_directory = priv <> "/static"
+  let db_path = db.resolve_path(priv)
 
   let assert Ok(conn) = open_db(priv)
   let assert Ok(_) = db.run_migrations(conn)
 
   let secret_key_base = secret_key_base()
-  let handler = fn(req) { router.handle_request(req, static_directory, conn) }
+  let handler = fn(req) {
+    router.handle_request(req, static_directory, db_path, conn)
+  }
 
   let assert Ok(_) =
     handler
@@ -33,15 +38,15 @@ pub fn main() -> Nil {
 }
 
 fn open_db(priv: String) -> Result(db.Conn, db.Error) {
-  let path = case envoy.get("DATABASE_URL") {
-    Ok(p) -> p
+  let path = db.resolve_path(priv)
+  case envoy.get("DATABASE_URL") {
+    Ok(_) -> db.open(path)
     Error(_) -> {
       let dir = priv <> "/data"
       let _ = simplifile.create_directory_all(dir)
-      dir <> "/royal.sqlite3"
+      db.open(path)
     }
   }
-  db.open(path)
 }
 
 fn port() -> Int {

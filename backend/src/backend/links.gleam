@@ -25,7 +25,7 @@ pub type Error {
 }
 
 pub type RedirectResult {
-  Found(String)
+  Found(target_url: String, link_id: Int)
   Gone
 }
 
@@ -95,18 +95,18 @@ pub fn claim_redirect(slug: String, conn: db.Conn) -> Result(RedirectResult, Err
      WHERE slug = ?
        AND (click_limit IS NULL OR click_count < click_limit)
        AND (expires_at IS NULL OR expires_at > unixepoch())
-     RETURNING target_url"
+     RETURNING id, target_url"
 
   let res =
     sqlight.query(
       sql,
       on: conn,
       with: [sqlight.text(slug)],
-      expecting: decode.at([0], decode.string),
+      expecting: redirect_decoder(),
     )
 
   case res {
-    Ok([url, ..]) -> Ok(Found(url))
+    Ok([#(link_id, url), ..]) -> Ok(Found(url, link_id))
     Ok([]) ->
       case find_by_slug(slug, conn) {
         Ok(_) -> Ok(Gone)
@@ -118,6 +118,12 @@ pub fn claim_redirect(slug: String, conn: db.Conn) -> Result(RedirectResult, Err
 }
 
 // ------------ internals --------------------------------------------------
+
+fn redirect_decoder() -> decode.Decoder(#(Int, String)) {
+  use link_id <- decode.field(0, decode.int)
+  use target_url <- decode.field(1, decode.string)
+  decode.success(#(link_id, target_url))
+}
 
 fn link_decoder() -> decode.Decoder(Link) {
   use id <- decode.field(0, decode.int)

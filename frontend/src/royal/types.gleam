@@ -43,6 +43,11 @@ pub type Model {
     error: Option(String),
     expiry: ExpiryPreset,
     click_limit: String,
+    stats_slug: Option(String),
+    stats_secret: Option(String),
+    stats: Option(api.LinkStats),
+    stats_error: Option(String),
+    stats_loading: Bool,
   )
 }
 
@@ -58,4 +63,6 @@ pub type Msg {
   ResetClicked
   CopyClicked(slug: String, text: String)
   CopyCleared
+  StatsLoaded(api.LinkStats)
+  StatsFailed(api.ApiError)
 }

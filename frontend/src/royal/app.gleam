@@ -17,9 +17,17 @@ import royal/view
 // INIT ------------------------------------------------------------------------
 
 fn init(_flags) -> #(types.Model, Effect(types.Msg)) {
+  let stats_slug = case ffi.stats_page_slug() {
+    "" -> option.None
+    slug -> option.Some(slug)
+  }
+  let stats_secret = case ffi.stats_page_secret() {
+    "" -> option.None
+    secret -> option.Some(secret)
+  }
   let model =
     types.Model(
-      origin: ffi.page_origin(),
+      origin: ffi.short_link_origin(),
       url: format.strip_scheme(data.slides_url),
       phase: types.Idle,
       result: option.None,
@@ -28,8 +36,29 @@ fn init(_flags) -> #(types.Model, Effect(types.Msg)) {
       error: option.None,
       expiry: types.Never,
       click_limit: "",
+      stats_slug:,
+      stats_secret:,
+      stats: option.None,
+      stats_error: option.None,
+      stats_loading: option.is_some(stats_slug),
     )
-  #(model, effect.none())
+  #(model, load_stats_effect(stats_slug, stats_secret))
+}
+
+fn load_stats_effect(
+  slug: option.Option(String),
+  secret: option.Option(String),
+) -> Effect(types.Msg) {
+  case slug, secret {
+    option.Some(s), option.Some(token) ->
+      api.fetch_stats(s, token, fn(result) {
+        case result {
+          Ok(stats) -> types.StatsLoaded(stats)
+          Error(e) -> types.StatsFailed(e)
+        }
+      })
+    _, _ -> effect.none()
+  }
 }
 
 // UPDATE ----------------------------------------------------------------------
@@ -121,6 +150,25 @@ fn update(model: types.Model, msg: types.Msg) -> #(types.Model, Effect(types.Msg
 
     types.CopyCleared -> #(
       types.Model(..model, copied: option.None),
+      effect.none(),
+    )
+
+    types.StatsLoaded(stats) -> #(
+      types.Model(
+        ..model,
+        stats: option.Some(stats),
+        stats_loading: False,
+        stats_error: option.None,
+      ),
+      effect.none(),
+    )
+
+    types.StatsFailed(err) -> #(
+      types.Model(
+        ..model,
+        stats_loading: False,
+        stats_error: option.Some(stats_error_text(err)),
+      ),
       effect.none(),
     )
   }
@@ -215,7 +263,16 @@ fn error_text(err: api.ApiError) -> String {
     api.Network(msg) -> "Network error: " <> msg
     api.Conflict -> "That title is taken — choose another."
     api.BadRequest(msg) -> msg
+    api.Forbidden -> "That management key does not match this link."
     api.Server(msg) -> "The realm is briefly indisposed: " <> msg
+  }
+}
+
+fn stats_error_text(err: api.ApiError) -> String {
+  case err {
+    api.Forbidden ->
+      "The management key is missing or incorrect. Open this page from the link you received when the URL was minted."
+    _ -> error_text(err)
   }
 }
 
@@ -226,6 +283,7 @@ fn after(ms: Int, msg: types.Msg) -> Effect(types.Msg) {
 // MAIN ------------------------------------------------------------------------
 
 pub fn main() -> Nil {
+  ffi.handoff_short_link_if_needed()
   let app = lustre.application(init, update, view.view)
   let assert Ok(_) = lustre.start(app, "#app", Nil)
   Nil

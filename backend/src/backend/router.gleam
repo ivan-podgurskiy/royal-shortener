@@ -16,17 +16,19 @@ import wisp.{type Request, type Response}
 pub fn handle_request(
   req: Request,
   static_directory: String,
+  db_path: String,
   conn: db.Conn,
 ) -> Response {
   use <- wisp.serve_static(req, under: "/", from: static_directory)
 
   case request.path_segments(req) {
+    ["api", "links", slug, "stats"] -> api.link_stats(req, slug, conn)
     ["api", "links", slug, "qr"] -> api.link_qr(req, slug, conn)
     ["api", "links"] -> api.create_link(req, conn)
     ["health"] -> health()
     [slug] ->
       case req.method, is_reserved_top_level(slug) {
-        http.Get, False -> api.redirect_slug(slug, conn)
+        http.Get, False -> api.redirect_slug(req, slug, db_path, conn)
         _, _ -> index(static_directory)
       }
     _ -> index(static_directory)

@@ -12,6 +12,17 @@ pub fn copy_text(text: String) -> Nil
 @external(javascript, "./ffi_ext.mjs", "after")
 pub fn after(ms: Int, callback: fn() -> Nil) -> Nil
 
-/// The page origin, e.g. `https://localhost:1234`.
-@external(javascript, "./ffi_ext.mjs", "pageOrigin")
-pub fn page_origin() -> String
+/// Origin for short links — in dev points at the backend port where redirects
+/// are handled, not the Lustre dev-server port.
+@external(javascript, "./ffi_ext.mjs", "shortLinkOrigin")
+pub fn short_link_origin() -> String
+
+/// Dev-only: redirect `localhost:1234/<slug>` to the backend before SPA boot.
+@external(javascript, "./ffi_ext.mjs", "handoffShortLinkIfNeeded")
+pub fn handoff_short_link_if_needed() -> Nil
+
+@external(javascript, "./ffi_ext.mjs", "statsPageSlug")
+pub fn stats_page_slug() -> String
+
+@external(javascript, "./ffi_ext.mjs", "statsPageSecret")
+pub fn stats_page_secret() -> String

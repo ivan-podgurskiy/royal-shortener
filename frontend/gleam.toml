@@ -34,7 +34,13 @@ content = "Royal Shortener takes long, unworthy URLs and crowns them as elegant 
 
 # Dev-server proxy: during `gleam run -m lustre/dev start` (port 1234) any
 # request under /api is forwarded to the backend (port 8080), so the frontend
-# can talk to the API from a single origin with live-reload intact. In
-# production the backend serves both the bundle and the API, so this is unused.
+# can talk to the API from a single origin with live-reload intact.
+#
+# Short-link redirects (GET /:slug) are NOT proxied — they are served only by
+# the backend. Short URLs therefore use localhost:8080 in dev (see
+# ffi_ext.mjs `shortLinkOrigin`). Opening localhost:1234/<slug> hands off to
+# :8080 before the SPA loads.
+#
+# In production the backend serves the bundle, API, and redirects from one port.
 [tools.lustre.dev]
 proxy = { from = "/api", to = "http://localhost:8080/api" }

@@ -8,6 +8,7 @@ import lustre/attribute.{type Attribute, attribute} as attr
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
+import royal/api
 import royal/data
 import royal/format
 import royal/icons
@@ -15,6 +16,13 @@ import royal/styles
 import royal/types
 
 pub fn view(model: types.Model) -> Element(types.Msg) {
+  case model.stats_slug {
+    option.Some(slug) -> stats_page(model, slug)
+    option.None -> landing_page(model)
+  }
+}
+
+fn landing_page(model: types.Model) -> Element(types.Msg) {
   html.div(
     [
       attr.class("royal-root"),
@@ -233,6 +241,13 @@ fn result_card(model: types.Model, result: types.Minted) -> Element(types.Msg) {
           ],
           [element.text("Download QR")],
         ),
+        html.a(
+          [
+            attr.href(stats_url(model.origin, result.slug, result.secret)),
+            attr.class("copy-btn"),
+          ],
+          [element.text("View ledger")],
+        ),
         html.button([attr.class("link-btn"), event.on_click(types.ResetClicked)], [
           element.text("Shorten another ↺"),
         ]),
@@ -328,6 +343,10 @@ fn error_banner(model: types.Model) -> Element(types.Msg) {
 
 fn qr_url(slug: String) -> String {
   "/api/links/" <> slug <> "/qr"
+}
+
+fn stats_url(_origin: String, slug: String, secret: String) -> String {
+  "/stats/" <> slug <> "?secret=" <> secret
 }
 
 fn qr_image(model: types.Model, slug: String) -> Element(types.Msg) {
@@ -543,6 +562,129 @@ fn footer_col(heading: String, links: List(String)) -> Element(types.Msg) {
   )
 }
 
+fn stats_page(model: types.Model, slug: String) -> Element(types.Msg) {
+  html.div(
+    [
+      attr.class("royal-root"),
+      attribute("data-theme", "navy"),
+      attribute("data-ornament", "on"),
+      attribute("data-glow", "on"),
+    ],
+    [
+      html.style([], styles.css),
+      html.style([], extra_css),
+      html.div([attr.class("royal-bg")], []),
+      html.div([attr.class("royal-shell stats-page")], [
+        html.div([attr.class("stats-head")], [
+          html.div([attr.class("eyebrow solo")], [element.text("The Royal Ledger")]),
+          html.h1([], [
+            element.text("Analytics for "),
+            html.span([attr.class("gold-text")], [element.text(slug)]),
+          ]),
+          html.p([attr.class("sub")], [
+            element.text(format.short_url(model.origin, slug)),
+          ]),
+          html.a([attr.href("/"), attr.class("btn btn-ghost")], [
+            element.text("← Back to the court"),
+          ]),
+        ]),
+        stats_body(model),
+      ]),
+    ],
+  )
+}
+
+fn stats_body(model: types.Model) -> Element(types.Msg) {
+  case model.stats_loading {
+    True ->
+      html.div([attr.class("stats-loading")], [
+        element.text("Summoning click records from the ledger…"),
+      ])
+    False ->
+      case model.stats_error {
+        option.Some(msg) ->
+          html.div([attr.class("stats-error")], [element.text(msg)])
+        option.None ->
+          case model.stats {
+            option.Some(stats) -> stats_dashboard(stats)
+            option.None -> element.none()
+          }
+      }
+  }
+}
+
+fn stats_dashboard(stats: api.LinkStats) -> Element(types.Msg) {
+  html.div([], [
+    html.div([attr.class("stats-card"), attr.style("margin-bottom", "24px")], [
+      html.h3([], [element.text("Total clicks")]),
+      html.div([attr.class("stats-total")], [
+        element.text(format.with_commas(stats.total)),
+      ]),
+    ]),
+    html.div([attr.class("stats-grid")], [
+      stats_table_card("By country", stats.by_country),
+      stats_table_card("By device", stats.by_device),
+      bar_chart_card("Last 24 hours", stats.hourly),
+      bar_chart_card("Last 30 days", stats.daily),
+    ]),
+  ])
+}
+
+fn stats_table_card(title: String, rows: List(api.CountRow)) -> Element(types.Msg) {
+  html.div([attr.class("stats-card")], [
+    html.h3([], [element.text(title)]),
+    case rows {
+      [] -> html.p([attr.class("hint")], [element.text("No records yet.")])
+      _ ->
+        html.table([attr.class("stats-table")], [
+          html.tbody([], list.map(rows, fn(row) {
+            html.tr([], [
+              html.td([], [element.text(row.label)]),
+              html.td([], [element.text(format.with_commas(row.count))]),
+            ])
+          })),
+        ])
+    },
+  ])
+}
+
+fn bar_chart_card(title: String, rows: List(api.BucketRow)) -> Element(types.Msg) {
+  html.div([attr.class("stats-card")], [
+    html.h3([], [element.text(title)]),
+    case rows {
+      [] -> html.p([attr.class("hint")], [element.text("No records yet.")])
+      _ -> bar_chart(rows)
+    },
+  ])
+}
+
+fn bar_chart(rows: List(api.BucketRow)) -> Element(types.Msg) {
+  let max =
+    rows
+    |> list.fold(0, fn(acc, row) {
+      case row.count > acc {
+        True -> row.count
+        False -> acc
+      }
+    })
+  html.div([attr.class("bar-chart")], list.map(rows, fn(row) {
+    let height =
+      case max {
+        0 -> "2px"
+        _ -> int.to_string(row.count * 100 / max) <> "%"
+      }
+    html.div([attr.class("bar-col")], [
+      html.div(
+        [attr.class("bar-fill"), attr.style("height", height)],
+        [],
+      ),
+      html.span([attr.class("bar-label")], [
+        element.text(format.with_commas(row.count)),
+      ]),
+    ])
+  }))
+}
+
 const extra_css = "
 @keyframes collapseAway {
   0% { transform: scaleX(1); letter-spacing: 0px; filter: blur(0px); opacity: 1; }
@@ -566,4 +708,21 @@ const extra_css = "
 .secret-row .secret { display: block; padding: 6px 0; font-size: 13px; word-break: break-all; }
 .secret-row .hint { margin-top: 4px; font-size: 12px; opacity: 0.75; }
 .error-banner { margin-top: 12px; padding: 10px 14px; border-radius: 8px; background: rgba(255,90,90,0.12); color: #ffd7d7; font-size: 14px; }
+.qr-real { display: grid; place-items: center; padding: 8px; background: rgba(255,255,255,0.95); border-radius: 12px; }
+.qr-img { display: block; width: 132px; height: 132px; }
+.stats-page { min-height: 100vh; padding: 48px 0 80px; }
+.stats-head { text-align: center; margin-bottom: 40px; }
+.stats-grid { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.stats-card { padding: 20px; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; background: rgba(0,0,0,0.18); }
+.stats-card h3 { margin: 0 0 12px; font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.75; }
+.stats-total { font-size: 3rem; color: var(--gold-1); font-family: 'Cormorant Garamond', Georgia, serif; }
+.stats-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.stats-table td { padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.stats-table td:last-child { text-align: right; color: var(--gold-2); }
+.bar-chart { display: flex; align-items: flex-end; gap: 4px; height: 120px; margin-top: 12px; }
+.bar-col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; min-width: 0; }
+.bar-fill { width: 100%; background: linear-gradient(180deg, var(--gold-1), var(--gold-3)); border-radius: 3px 3px 0 0; min-height: 2px; }
+.bar-label { font-size: 9px; opacity: 0.65; }
+.stats-error { margin: 24px auto; max-width: 36rem; padding: 16px 20px; border-radius: 10px; background: rgba(255,90,90,0.12); color: #ffd7d7; text-align: center; }
+.stats-loading { text-align: center; opacity: 0.75; padding: 48px 0; }
 "

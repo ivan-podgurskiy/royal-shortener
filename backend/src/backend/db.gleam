@@ -3,6 +3,7 @@
 //// Migrations live in `priv/migrations/NNN_*.sql`. The runner tracks
 //// applied versions in `schema_migrations` and runs new files in order.
 
+import envoy
 import gleam/dynamic/decode
 import gleam/int
 import gleam/list
@@ -21,6 +22,13 @@ pub type Error {
 
 pub type Conn =
   sqlight.Connection
+
+pub fn resolve_path(priv: String) -> String {
+  case envoy.get("DATABASE_URL") {
+    Ok(path) -> path
+    Error(_) -> priv <> "/data/royal.sqlite3"
+  }
+}
 
 pub fn open(path: String) -> Result(Conn, Error) {
   use conn <- result.try(sqlight.open(path) |> result.map_error(OpenError))

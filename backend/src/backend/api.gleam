@@ -1,5 +1,7 @@
 //// HTTP handlers for /api/* routes and slug redirects.
 
+import backend/analytics
+import backend/clicks
 import backend/db
 import backend/links
 import backend/qr
@@ -41,14 +43,44 @@ pub fn create_link(req: Request, conn: db.Conn) -> Response {
   }
 }
 
-pub fn redirect_slug(slug: String, conn: db.Conn) -> Response {
+pub fn redirect_slug(
+  req: Request,
+  slug: String,
+  db_path: String,
+  conn: db.Conn,
+) -> Response {
   case links.claim_redirect(slug, conn) {
-    Ok(links.Found(url)) ->
+    Ok(links.Found(url, link_id)) -> {
+      analytics.record_after_redirect(req, link_id, db_path)
       wisp.response(302)
       |> response.set_header("location", url)
+    }
     Ok(links.Gone) -> revoked()
     Error(links.NotFound) -> not_found()
     Error(_) -> server_error()
+  }
+}
+
+pub fn link_stats(req: Request, slug: String, conn: db.Conn) -> Response {
+  use <- wisp.require_method(req, http.Get)
+
+  case list.key_find(wisp.get_query(req), "secret") {
+    Error(_) -> forbidden()
+    Ok(provided) ->
+      case links.find_by_slug(slug, conn) {
+        Ok(link) ->
+          case provided == link.secret {
+            True ->
+              case clicks.stats_for_link(link.id, conn) {
+                Ok(stats) ->
+                  wisp.json_response(json.to_string(clicks.stats_json(stats)), 200)
+                Error(_) -> server_error()
+              }
+            False -> forbidden()
+          }
+        Error(links.NotFound) -> not_found()
+        Error(_) -> server_error()
+      }
   }
 }
 
@@ -190,6 +222,10 @@ fn bad_request(message: String) -> Response {
 
 fn conflict(message: String) -> Response {
   error_json(409, message)
+}
+
+fn forbidden() -> Response {
+  error_json(403, "forbidden")
 }
 
 fn not_found() -> Response {

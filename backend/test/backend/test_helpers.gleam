@@ -4,19 +4,24 @@ import gleam/bit_array
 import gleam/http
 import gleam/http/request
 import gleam/list
+import gleam/string
+import gleam/uri
 import wisp
 import wisp/internal
 
 pub fn get(path: String) -> wisp.Request {
+  let #(path_only, query) = split_query(path)
   let reader = fn(_size) { Ok(internal.ReadingFinished) }
   let conn = internal.make_connection(reader, "test-secret")
   request.new()
   |> request.set_method(http.Get)
-  |> request.set_path(path)
+  |> request.set_path(path_only)
+  |> request.set_query(query)
   |> request.set_body(conn)
 }
 
 pub fn post_json(path: String, json: String) -> wisp.Request {
+  let #(path_only, query) = split_query(path)
   let body = bit_array.from_string(json)
   let reader = fn(_size) {
     Ok(internal.Chunk(body, fn(_size) { Ok(internal.ReadingFinished) }))
@@ -24,9 +29,21 @@ pub fn post_json(path: String, json: String) -> wisp.Request {
   let conn = internal.make_connection(reader, "test-secret")
   request.new()
   |> request.set_method(http.Post)
-  |> request.set_path(path)
+  |> request.set_path(path_only)
+  |> request.set_query(query)
   |> request.set_header("content-type", "application/json")
   |> request.set_body(conn)
+}
+
+fn split_query(path: String) -> #(String, List(#(String, String))) {
+  case string.split_once(path, on: "?") {
+    Ok(#(path_only, query)) ->
+      case uri.parse_query(query) {
+        Ok(pairs) -> #(path_only, pairs)
+        Error(_) -> #(path_only, [])
+      }
+    Error(_) -> #(path, [])
+  }
 }
 
 pub fn status(resp: wisp.Response) -> Int {

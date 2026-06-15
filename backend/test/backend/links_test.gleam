@@ -78,7 +78,7 @@ pub fn claim_redirect_increments_click_count_test() {
       conn: conn,
     )
 
-  let assert Ok(links.Found(url)) = links.claim_redirect("Crowned-abc", conn)
+  let assert Ok(links.Found(url, _)) = links.claim_redirect("Crowned-abc", conn)
   url |> should.equal("https://example.com/target")
 
   let assert Ok(link) = links.find_by_slug("Crowned-abc", conn)
@@ -96,7 +96,7 @@ pub fn claim_redirect_respects_click_limit_test() {
       conn: conn,
     )
 
-  let assert Ok(links.Found(_)) = links.claim_redirect("Limited-abc", conn)
+  let assert Ok(links.Found(_, _)) = links.claim_redirect("Limited-abc", conn)
   links.claim_redirect("Limited-abc", conn)
   |> should.equal(Ok(links.Gone))
 }
