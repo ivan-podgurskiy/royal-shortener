@@ -1,0 +1,37 @@
+# Royal Shortener — local Docker stack.
+#
+#   docker compose up --build
+#   open http://localhost:8080
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-}
+      DATABASE_URL: /data/royal.sqlite3
+      GEOIP_DB_PATH: /geoip/GeoLite2-Country.mmdb
+    volumes:
+      - royal-data:/data
+      - royal-geoip:/geoip
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://127.0.0.1:8080/health",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  royal-data:
+  royal-geoip:

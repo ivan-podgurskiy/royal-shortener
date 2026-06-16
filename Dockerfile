@@ -28,6 +28,9 @@ RUN gleam run -m lustre/dev build --minify --outdir=dist
 # ---- Stage 2: build the backend Erlang release ------------------------------
 FROM ${GLEAM_IMAGE} AS backend
 
+# jargon (Argon2) compiles native code during `gleam export erlang-shipment`.
+RUN apk add --no-cache build-base
+
 WORKDIR /build/backend
 
 COPY backend/gleam.toml backend/manifest.toml ./
