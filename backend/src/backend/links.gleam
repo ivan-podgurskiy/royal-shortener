@@ -3,6 +3,7 @@
 import backend/db
 import gleam/dynamic/decode
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import sqlight
 
 pub type Link {
@@ -86,8 +87,6 @@ pub fn find_by_slug(slug: String, conn: db.Conn) -> Result(Link, Error) {
   }
 }
 
-/// Atomically increment click_count and return the target URL when the link
-/// is still valid. Zero rows updated means expired or exhausted.
 pub fn claim_redirect(slug: String, conn: db.Conn) -> Result(RedirectResult, Error) {
   let sql =
     "UPDATE links
@@ -117,7 +116,70 @@ pub fn claim_redirect(slug: String, conn: db.Conn) -> Result(RedirectResult, Err
   }
 }
 
+pub type OwnedLink {
+  OwnedLink(
+    slug: String,
+    target_url: String,
+    click_count: Int,
+    created_at: Int,
+  )
+}
+
+pub fn claim_ownership(
+  slug: String,
+  secret: String,
+  owner_user_id: Int,
+  conn: db.Conn,
+) -> Bool {
+  let sql =
+    "UPDATE links
+     SET owner_user_id = ?
+     WHERE slug = ? AND secret = ? AND owner_user_id IS NULL
+     RETURNING id"
+
+  let res =
+    sqlight.query(
+      sql,
+      on: conn,
+      with: [
+        sqlight.int(owner_user_id),
+        sqlight.text(slug),
+        sqlight.text(secret),
+      ],
+      expecting: decode.at([0], decode.int),
+    )
+
+  case res {
+    Ok([_, ..]) -> True
+    Ok([]) | Error(_) -> False
+  }
+}
+
+pub fn list_for_owner(owner_user_id: Int, conn: db.Conn) -> Result(List(OwnedLink), Error) {
+  let sql =
+    "SELECT slug, target_url, click_count, created_at
+     FROM links
+     WHERE owner_user_id = ?
+     ORDER BY created_at DESC"
+
+  sqlight.query(
+    sql,
+    on: conn,
+    with: [sqlight.int(owner_user_id)],
+    expecting: owned_link_decoder(),
+  )
+  |> result.map_error(fn(e) { StorageError(error_message(e)) })
+}
+
 // ------------ internals --------------------------------------------------
+
+fn owned_link_decoder() -> decode.Decoder(OwnedLink) {
+  use slug <- decode.field(0, decode.string)
+  use target_url <- decode.field(1, decode.string)
+  use click_count <- decode.field(2, decode.int)
+  use created_at <- decode.field(3, decode.int)
+  decode.success(OwnedLink(slug:, target_url:, click_count:, created_at:))
+}
 
 fn redirect_decoder() -> decode.Decoder(#(Int, String)) {
   use link_id <- decode.field(0, decode.int)

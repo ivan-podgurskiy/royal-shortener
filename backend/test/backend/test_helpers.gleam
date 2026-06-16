@@ -63,3 +63,15 @@ pub fn string_body(resp: wisp.Response) -> Result(String, Nil) {
     _ -> Error(Nil)
   }
 }
+
+pub fn with_cookie(req: wisp.Request, set_cookie: String) -> wisp.Request {
+  let cookie = extract_cookie_value(set_cookie)
+  request.set_header(req, "cookie", cookie)
+}
+
+fn extract_cookie_value(set_cookie: String) -> String {
+  case string.split(set_cookie, on: ";") {
+    [first, ..] -> string.trim(first)
+    [] -> set_cookie
+  }
+}

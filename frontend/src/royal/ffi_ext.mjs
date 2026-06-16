@@ -93,3 +93,69 @@ export function statsPageSecret() {
   const params = new URLSearchParams(window.location.search);
   return params.get("secret") ?? "";
 }
+
+export function appPage() {
+  const path = window.location.pathname.replace(/\/+$/, "") || "/";
+  if (path === "/login") return "login";
+  if (path === "/signup") return "signup";
+  if (path === "/dashboard") return "dashboard";
+  if (path.match(/^\/stats\/[^/]+$/)) return "stats";
+  return "home";
+}
+
+const pendingClaimsKey = "royal_pending_claims";
+
+export function savePendingClaim(slug, secret) {
+  try {
+    const raw = localStorage.getItem(pendingClaimsKey);
+    const pairs = raw ? JSON.parse(raw) : [];
+    const next = pairs.filter((p) => p.slug !== slug);
+    next.push({ slug, secret });
+    localStorage.setItem(pendingClaimsKey, JSON.stringify(next));
+  } catch (_) {}
+  return undefined;
+}
+
+export function loadPendingClaimsJson() {
+  try {
+    return localStorage.getItem(pendingClaimsKey) ?? "[]";
+  } catch (_) {
+    return "[]";
+  }
+}
+
+export function clearPendingClaims() {
+  try {
+    localStorage.removeItem(pendingClaimsKey);
+  } catch (_) {}
+  return undefined;
+}
+
+function credFetch(method, path, body, callback) {
+  const opts = {
+    method,
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+  };
+  if (body !== null) {
+    opts.body = body;
+  }
+  fetch(path, opts)
+    .then(async (response) => {
+      const text = await response.text();
+      callback(response.status, text);
+    })
+    .catch(() => {
+      callback(0, "");
+    });
+}
+
+export function postJsonCred(path, body, callback) {
+  credFetch("POST", path, body, callback);
+  return undefined;
+}
+
+export function getCred(path, callback) {
+  credFetch("GET", path, null, callback);
+  return undefined;
+}

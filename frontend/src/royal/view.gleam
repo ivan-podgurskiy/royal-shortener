@@ -16,10 +16,50 @@ import royal/styles
 import royal/types
 
 pub fn view(model: types.Model) -> Element(types.Msg) {
-  case model.stats_slug {
-    option.Some(slug) -> stats_page(model, slug)
-    option.None -> landing_page(model)
+  case model.page {
+    types.Stats ->
+      case model.stats_slug {
+        option.Some(slug) -> stats_page(model, slug)
+        option.None -> landing_page(model)
+      }
+    types.Login -> auth_page(model, login_config())
+    types.Signup -> auth_page(model, signup_config())
+    types.Dashboard -> dashboard_page(model)
+    types.Home -> landing_page(model)
   }
+}
+
+type AuthConfig {
+  AuthConfig(
+    title: String,
+    subtitle: String,
+    submit: types.Msg,
+    submit_label: String,
+    alt_href: String,
+    alt_label: String,
+  )
+}
+
+fn login_config() -> AuthConfig {
+  AuthConfig(
+    title: "Sign in",
+    subtitle: "Return to your royal ledger.",
+    submit: types.LoginClicked,
+    submit_label: "Enter the court",
+    alt_href: "/signup",
+    alt_label: "Create an account",
+  )
+}
+
+fn signup_config() -> AuthConfig {
+  AuthConfig(
+    title: "Sign up",
+    subtitle: "Claim your title and bind your links.",
+    submit: types.SignupClicked,
+    submit_label: "Claim your throne",
+    alt_href: "/login",
+    alt_label: "Already have an account?",
+  )
 }
 
 fn landing_page(model: types.Model) -> Element(types.Msg) {
@@ -53,6 +93,8 @@ fn nav() -> Element(types.Msg) {
       ]),
     ]),
     html.div([attr.class("nav-links")], [
+      nav_link("/dashboard", "Dashboard"),
+      nav_link("/login", "Sign in"),
       nav_link("#features", "Privileges"),
       // nav_link("#ledger", "The Ledger"),
       // nav_link("#pricing", "Patronage"),
@@ -71,6 +113,180 @@ fn nav() -> Element(types.Msg) {
 
 fn nav_link(href: String, label: String) -> Element(types.Msg) {
   html.a([attr.href(href)], [element.text(label)])
+}
+
+fn auth_page(model: types.Model, config: AuthConfig) -> Element(types.Msg) {
+  html.div(
+    [
+      attr.class("royal-root"),
+      attribute("data-theme", "navy"),
+      attribute("data-ornament", "on"),
+      attribute("data-glow", "on"),
+    ],
+    [
+      html.style([], styles.css),
+      html.style([], extra_css),
+      html.div([attr.class("royal-bg")], []),
+      html.div([attr.class("royal-shell auth-page")], [
+        html.div([attr.class("auth-panel")], [
+          html.div([attr.class("eyebrow solo")], [element.text("Royal Shortener")]),
+          html.h1([], [element.text(config.title)]),
+          html.p([attr.class("sub")], [element.text(config.subtitle)]),
+          auth_form(model, config),
+          html.p([attr.class("auth-alt")], [
+            html.a([attr.href(config.alt_href)], [element.text(config.alt_label)]),
+          ]),
+          html.a([attr.href("/"), attr.class("btn btn-ghost")], [
+            element.text("← Back to the court"),
+          ]),
+        ]),
+      ]),
+    ],
+  )
+}
+
+fn auth_form(model: types.Model, config: AuthConfig) -> Element(types.Msg) {
+  html.div([attr.class("auth-form")], [
+    html.label([attr.class("protection-field")], [
+      html.span([attr.class("k")], [element.text("Email")]),
+      html.input([
+        attr.class("protection-input"),
+        attr.type_("email"),
+        attr.value(model.auth_email),
+        attr.placeholder("you@example.com"),
+        event.on_input(types.AuthEmailChanged),
+      ]),
+    ]),
+    html.label([attr.class("protection-field")], [
+      html.span([attr.class("k")], [element.text("Password")]),
+      html.input([
+        attr.class("protection-input"),
+        attr.type_("password"),
+        attr.value(model.auth_password),
+        attr.placeholder("At least 8 characters"),
+        event.on_input(types.AuthPasswordChanged),
+      ]),
+    ]),
+    case model.auth_error {
+      option.Some(msg) -> html.div([attr.class("error-banner")], [element.text(msg)])
+      option.None -> element.none()
+    },
+    html.button(
+      [
+        attr.class("btn btn-gold"),
+        attr.type_("button"),
+        event.on_click(config.submit),
+      ],
+      [
+        case model.auth_loading {
+          True -> element.text("One moment…")
+          False -> element.text(config.submit_label)
+        },
+      ],
+    ),
+  ])
+}
+
+fn dashboard_page(model: types.Model) -> Element(types.Msg) {
+  html.div(
+    [
+      attr.class("royal-root"),
+      attribute("data-theme", "navy"),
+      attribute("data-ornament", "on"),
+      attribute("data-glow", "on"),
+    ],
+    [
+      html.style([], styles.css),
+      html.style([], extra_css),
+      html.div([attr.class("royal-bg")], []),
+      html.div([attr.class("royal-shell dashboard-page")], [
+        html.div([attr.class("dashboard-head")], [
+          html.div([attr.class("eyebrow solo")], [element.text("Your Royal Ledger")]),
+          html.h1([], [element.text("Dashboard")]),
+          case model.user {
+            option.Some(user) ->
+              html.p([attr.class("sub")], [element.text(user.email)])
+            option.None -> element.none()
+          },
+          html.div([attr.class("dashboard-actions")], [
+            html.a([attr.href("/"), attr.class("btn btn-ghost")], [
+              element.text("Mint a link"),
+            ]),
+            html.button(
+              [
+                attr.class("btn btn-ghost"),
+                attr.type_("button"),
+                event.on_click(types.LogoutClicked),
+              ],
+              [element.text("Sign out")],
+            ),
+          ]),
+        ]),
+        dashboard_body(model),
+      ]),
+    ],
+  )
+}
+
+fn dashboard_body(model: types.Model) -> Element(types.Msg) {
+  case model.dashboard_loading {
+    True ->
+      html.div([attr.class("stats-loading")], [
+        element.text("Opening the ledger…"),
+      ])
+    False ->
+      case model.dashboard_error {
+        option.Some(msg) ->
+          html.div([attr.class("stats-error")], [
+            element.text(msg),
+            html.a([attr.href("/login"), attr.class("btn btn-gold")], [
+              element.text("Sign in"),
+            ]),
+          ])
+        option.None ->
+          case model.dashboard_links {
+            [] ->
+              html.div([attr.class("stats-card")], [
+                html.p([], [
+                  element.text(
+                    "No links yet. Mint a short link on the home page — it will appear here after you sign in.",
+                  ),
+                ]),
+              ])
+            links -> dashboard_table(model, links)
+          }
+      }
+  }
+}
+
+fn dashboard_table(
+  model: types.Model,
+  links: List(api.DashboardLink),
+) -> Element(types.Msg) {
+  html.table([attr.class("stats-table dashboard-table")], [
+    html.thead([], [
+      html.tr([], [
+        html.th([], [element.text("Title")]),
+        html.th([], [element.text("Short link")]),
+        html.th([], [element.text("Clicks")]),
+        html.th([], [element.text("Actions")]),
+      ]),
+    ]),
+    html.tbody([], list.map(links, fn(link) {
+      let short = format.short_url(model.origin, link.slug)
+      html.tr([], [
+        html.td([], [element.text(format.derive_title(link.target_url))]),
+        html.td([], [element.text(short)]),
+        html.td([], [element.text(format.with_commas(link.click_count))]),
+        html.td([], [
+          html.a(
+            [attr.href("/stats/" <> link.slug), attr.class("btn btn-ghost")],
+            [element.text("Ledger")],
+          ),
+        ]),
+      ])
+    })),
+  ])
 }
 
 fn hero(model: types.Model) -> Element(types.Msg) {
@@ -725,4 +941,11 @@ const extra_css = "
 .bar-label { font-size: 9px; opacity: 0.65; }
 .stats-error { margin: 24px auto; max-width: 36rem; padding: 16px 20px; border-radius: 10px; background: rgba(255,90,90,0.12); color: #ffd7d7; text-align: center; }
 .stats-loading { text-align: center; opacity: 0.75; padding: 48px 0; }
+.auth-page, .dashboard-page { min-height: 100vh; padding: 48px 0 80px; display: grid; place-items: center; }
+.auth-panel { max-width: 28rem; width: 100%; text-align: center; padding: 32px; border: 1px solid rgba(255,255,255,0.12); border-radius: 16px; background: rgba(0,0,0,0.18); }
+.auth-form { display: flex; flex-direction: column; gap: 14px; margin: 24px 0; text-align: left; }
+.auth-alt { margin: 16px 0 24px; font-size: 14px; opacity: 0.85; }
+.dashboard-head { text-align: center; margin-bottom: 32px; }
+.dashboard-actions { display: flex; gap: 12px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+.dashboard-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.7; padding-bottom: 8px; }
 "

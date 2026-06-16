@@ -18,3 +18,17 @@ pub fn stats_decoder_test() {
   stats.total |> should.equal(3)
   stats.by_country |> should.equal([api.CountRow("US", 2), api.CountRow("??", 1)])
 }
+
+pub fn user_decoder_test() {
+  let body = "{\"id\":1,\"email\":\"knight@example.com\"}"
+  let assert Ok(user) = json.parse(body, api.user_decoder())
+  user.email |> should.equal("knight@example.com")
+}
+
+pub fn dashboard_link_decoder_test() {
+  let body =
+    "{\"slug\":\"Royal-abc\",\"target_url\":\"https://example.com\",\"click_count\":2,\"created_at\":1710000000,\"short_url\":\"/Royal-abc\"}"
+  let assert Ok(link) = json.parse(body, api.dashboard_link_decoder())
+  link.slug |> should.equal("Royal-abc")
+  link.click_count |> should.equal(2)
+}

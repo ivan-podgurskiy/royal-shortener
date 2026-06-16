@@ -1,4 +1,5 @@
 import backend/api
+import backend/auth
 import backend/db
 import backend/slug as slug_mod
 import gleam/http
@@ -22,6 +23,11 @@ pub fn handle_request(
   use <- wisp.serve_static(req, under: "/", from: static_directory)
 
   case request.path_segments(req) {
+    ["api", "auth", "signup"] -> auth.signup(req, conn)
+    ["api", "auth", "login"] -> auth.login(req, conn)
+    ["api", "auth", "logout"] -> auth.logout(req, conn)
+    ["api", "me", "links"] -> auth.my_links(req, conn)
+    ["api", "me", "claim-links"] -> auth.claim_links(req, conn)
     ["api", "links", slug, "stats"] -> api.link_stats(req, slug, conn)
     ["api", "links", slug, "qr"] -> api.link_qr(req, slug, conn)
     ["api", "links"] -> api.create_link(req, conn)

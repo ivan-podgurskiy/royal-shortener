@@ -3,6 +3,14 @@
 import gleam/option.{type Option}
 import royal/api
 
+pub type Page {
+  Home
+  Login
+  Signup
+  Dashboard
+  Stats
+}
+
 pub type Phase {
   Idle
   Animating
@@ -35,6 +43,7 @@ pub type LedgerItem {
 pub type Model {
   Model(
     origin: String,
+    page: Page,
     url: String,
     phase: Phase,
     result: Option(Minted),
@@ -48,6 +57,14 @@ pub type Model {
     stats: Option(api.LinkStats),
     stats_error: Option(String),
     stats_loading: Bool,
+    auth_email: String,
+    auth_password: String,
+    auth_error: Option(String),
+    auth_loading: Bool,
+    user: Option(api.User),
+    dashboard_links: List(api.DashboardLink),
+    dashboard_loading: Bool,
+    dashboard_error: Option(String),
   )
 }
 
@@ -65,4 +82,15 @@ pub type Msg {
   CopyCleared
   StatsLoaded(api.LinkStats)
   StatsFailed(api.ApiError)
+  AuthEmailChanged(String)
+  AuthPasswordChanged(String)
+  SignupClicked
+  LoginClicked
+  LogoutClicked
+  AuthSucceeded(api.User)
+  AuthFailed(String)
+  DashboardLinksLoaded(List(api.DashboardLink))
+  DashboardLinksFailed(String)
+  ClaimDone
+  LogoutDone
 }

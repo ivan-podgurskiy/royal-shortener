@@ -26,3 +26,25 @@ pub fn stats_page_slug() -> String
 
 @external(javascript, "./ffi_ext.mjs", "statsPageSecret")
 pub fn stats_page_secret() -> String
+
+@external(javascript, "./ffi_ext.mjs", "appPage")
+pub fn app_page() -> String
+
+@external(javascript, "./ffi_ext.mjs", "savePendingClaim")
+pub fn save_pending_claim(slug: String, secret: String) -> Nil
+
+@external(javascript, "./ffi_ext.mjs", "loadPendingClaimsJson")
+pub fn load_pending_claims_json() -> String
+
+@external(javascript, "./ffi_ext.mjs", "clearPendingClaims")
+pub fn clear_pending_claims() -> Nil
+
+@external(javascript, "./ffi_ext.mjs", "postJsonCred")
+pub fn post_json_cred(
+  path: String,
+  body: String,
+  callback: fn(Int, String) -> Nil,
+) -> Nil
+
+@external(javascript, "./ffi_ext.mjs", "getCred")
+pub fn get_cred(path: String, callback: fn(Int, String) -> Nil) -> Nil

@@ -1,9 +1,12 @@
 //// Royal Shortener — entry point: state (Model), logic (init/update/shorten)
 //// and wiring (main). The view markup lives in `royal/view`.
 
+import gleam/dynamic/decode
 import gleam/int
+import gleam/json
 import gleam/list
 import gleam/option
+import gleam/result
 import gleam/string
 import lustre
 import lustre/effect.{type Effect}
@@ -17,6 +20,7 @@ import royal/view
 // INIT ------------------------------------------------------------------------
 
 fn init(_flags) -> #(types.Model, Effect(types.Msg)) {
+  let page = parse_page(ffi.app_page())
   let stats_slug = case ffi.stats_page_slug() {
     "" -> option.None
     slug -> option.Some(slug)
@@ -28,6 +32,7 @@ fn init(_flags) -> #(types.Model, Effect(types.Msg)) {
   let model =
     types.Model(
       origin: ffi.short_link_origin(),
+      page:,
       url: format.strip_scheme(data.slides_url),
       phase: types.Idle,
       result: option.None,
@@ -40,9 +45,33 @@ fn init(_flags) -> #(types.Model, Effect(types.Msg)) {
       stats_secret:,
       stats: option.None,
       stats_error: option.None,
-      stats_loading: option.is_some(stats_slug),
+      stats_loading: page == types.Stats && option.is_some(stats_slug),
+      auth_email: "",
+      auth_password: "",
+      auth_error: option.None,
+      auth_loading: False,
+      user: option.None,
+      dashboard_links: [],
+      dashboard_loading: page == types.Dashboard,
+      dashboard_error: option.None,
     )
-  #(model, load_stats_effect(stats_slug, stats_secret))
+  let effects =
+    case page {
+      types.Stats -> load_stats_effect(stats_slug, stats_secret)
+      types.Dashboard -> load_dashboard()
+      _ -> effect.none()
+    }
+  #(model, effects)
+}
+
+fn parse_page(name: String) -> types.Page {
+  case name {
+    "login" -> types.Login
+    "signup" -> types.Signup
+    "dashboard" -> types.Dashboard
+    "stats" -> types.Stats
+    _ -> types.Home
+  }
 }
 
 fn load_stats_effect(
@@ -58,6 +87,33 @@ fn load_stats_effect(
         }
       })
     _, _ -> effect.none()
+  }
+}
+
+fn load_dashboard() -> Effect(types.Msg) {
+  api.fetch_my_links(fn(result) {
+    case result {
+      Ok(links) -> types.DashboardLinksLoaded(links)
+      Error(e) -> types.DashboardLinksFailed(auth_error_text(e))
+    }
+  })
+}
+
+fn parse_pending_claims(raw: String) -> List(api.ClaimPair) {
+  json.parse(raw, decode.list(api.claim_pair_decoder()))
+  |> result.unwrap([])
+}
+
+fn post_auth_effects(pairs: List(api.ClaimPair)) -> Effect(types.Msg) {
+  case pairs {
+    [] -> load_dashboard()
+    _ ->
+      api.claim_links(pairs, fn(result) {
+        case result {
+          Ok(_) -> types.ClaimDone
+          Error(_) -> types.ClaimDone
+        }
+      })
   }
 }
 
@@ -80,12 +136,13 @@ fn update(model: types.Model, msg: types.Msg) -> #(types.Model, Effect(types.Msg
       effect.none(),
     )
 
-    types.KeyPressed("Enter") -> shorten(model)
+    types.KeyPressed("Enter") -> submit_primary(model)
     types.KeyPressed(_) -> #(model, effect.none())
 
     types.ShortenClicked -> shorten(model)
 
     types.MintSucceeded(minted) -> {
+      ffi.save_pending_claim(minted.slug, minted.secret)
       let long_text = format.strip_scheme(model.url)
       let result =
         types.Minted(
@@ -171,6 +228,133 @@ fn update(model: types.Model, msg: types.Msg) -> #(types.Model, Effect(types.Msg
       ),
       effect.none(),
     )
+
+    types.AuthEmailChanged(value) -> #(
+      types.Model(..model, auth_email: value, auth_error: option.None),
+      effect.none(),
+    )
+
+    types.AuthPasswordChanged(value) -> #(
+      types.Model(..model, auth_password: value, auth_error: option.None),
+      effect.none(),
+    )
+
+    types.SignupClicked -> auth_submit(model, api.signup)
+
+    types.LoginClicked -> auth_submit(model, api.login)
+
+    types.LogoutClicked -> #(
+      types.Model(..model, auth_loading: True),
+      api.logout(fn(_) { types.LogoutDone }),
+    )
+
+    types.LogoutDone -> #(
+      types.Model(
+        ..model,
+        user: option.None,
+        auth_loading: False,
+        auth_error: option.None,
+        auth_password: "",
+        dashboard_links: [],
+        dashboard_loading: False,
+        dashboard_error: option.None,
+        page: types.Home,
+      ),
+      effect.none(),
+    )
+
+    types.AuthSucceeded(user) -> {
+      let pairs = parse_pending_claims(ffi.load_pending_claims_json())
+      #(
+        types.Model(
+          ..model,
+          user: option.Some(user),
+          auth_loading: False,
+          auth_error: option.None,
+          auth_password: "",
+          page: types.Dashboard,
+          dashboard_loading: True,
+        ),
+        post_auth_effects(pairs),
+      )
+    }
+
+    types.AuthFailed(message) -> #(
+      types.Model(
+        ..model,
+        auth_loading: False,
+        auth_error: case message {
+          "" -> option.None
+          _ -> option.Some(message)
+        },
+        user: option.None,
+      ),
+      effect.none(),
+    )
+
+    types.ClaimDone -> {
+      ffi.clear_pending_claims()
+      #(
+        types.Model(..model, dashboard_loading: True),
+        load_dashboard(),
+      )
+    }
+
+    types.DashboardLinksLoaded(links) -> #(
+      types.Model(
+        ..model,
+        dashboard_links: links,
+        dashboard_loading: False,
+        dashboard_error: option.None,
+      ),
+      effect.none(),
+    )
+
+    types.DashboardLinksFailed(message) -> #(
+      types.Model(
+        ..model,
+        dashboard_loading: False,
+        dashboard_error: option.Some(message),
+        user: option.None,
+      ),
+      effect.none(),
+    )
+  }
+}
+
+fn auth_submit(
+  model: types.Model,
+  submit: fn(String, String, fn(Result(api.User, api.ApiError)) -> types.Msg) ->
+    Effect(types.Msg),
+) -> #(types.Model, Effect(types.Msg)) {
+  let email = string.trim(model.auth_email)
+  let password = model.auth_password
+  case email, password {
+    "", _ | _, "" -> #(
+      types.Model(
+        ..model,
+        auth_error: option.Some("Email and password are required."),
+      ),
+      effect.none(),
+    )
+    _, _ ->
+      #(
+        types.Model(..model, auth_loading: True, auth_error: option.None),
+        submit(email, password, fn(result) {
+          case result {
+            Ok(user) -> types.AuthSucceeded(user)
+            Error(e) -> types.AuthFailed(auth_error_text(e))
+          }
+        }),
+      )
+  }
+}
+
+fn submit_primary(model: types.Model) -> #(types.Model, Effect(types.Msg)) {
+  case model.page {
+    types.Login -> auth_submit(model, api.login)
+    types.Signup -> auth_submit(model, api.signup)
+    _ -> shorten(model)
   }
 }
 
@@ -265,6 +449,15 @@ fn error_text(err: api.ApiError) -> String {
     api.BadRequest(msg) -> msg
     api.Forbidden -> "That management key does not match this link."
     api.Server(msg) -> "The realm is briefly indisposed: " <> msg
+  }
+}
+
+fn auth_error_text(err: api.ApiError) -> String {
+  case err {
+    api.Conflict -> "That email is already registered."
+    api.BadRequest(msg) -> msg
+    api.Forbidden -> "Please sign in to continue."
+    _ -> error_text(err)
   }
 }
 
